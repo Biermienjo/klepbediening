@@ -1,197 +1,208 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d1514">
+<meta name="theme-color" content="#0a0b0c">
 <title>Klepbediening</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Opzet: een smalle instrumentenkolom. Bovenaan de klep zelf (schets van de pijp met de klep die meedraait),
-   daaronder de ene hoofdactie voor vooraf aan de rit, dan AUTO en OPEN naast elkaar, instellingen en logboek ingeklapt. */
+/* Opzet: een instrumentenschijf in het midden (boog = hoe ver de klep open staat, de klep zelf draait mee), daaronder
+   een enkele hoofdactie en twee rustige secundaire knoppen. Alles in haarlijnen op mat grafiet; één accentkleur per modus. */
 :root {
-  --bg: #eceff0; --surface: #ffffff; --raised: #f3f6f6; --ink: #0f1a19; --muted: #596a68; --line: #d2dad9;
-  --auto: #0a7568; --auto-ink: #ffffff; --open: #c4560a; --open-ink: #ffffff; --bad: #b3261e; --pipe: #8a9b98;
-  --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --bg: #efeeea; --surface: #fbfaf8; --ink: #15171a; --muted: #6b6f73; --hair: rgba(21,23,26,.12); --track: rgba(21,23,26,.1);
+  --auto: #2c6c88; --auto-ink: #ffffff; --open: #d4691a; --open-ink: #ffffff; --bad: #b3261e; --glow: .10;
+  --sans: "Archivo", system-ui, -apple-system, "Helvetica Neue", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0b1211; --surface: #131d1c; --raised: #192523; --ink: #e8f0ee; --muted: #8ea29f; --line: #263735;
-    --auto: #3fc8b4; --auto-ink: #04201b; --open: #f39140; --open-ink: #2b1200; --bad: #ff8d83; --pipe: #51635f;
+    --bg: #0a0b0c; --surface: #121416; --ink: #f2f1ee; --muted: #8b8f93; --hair: rgba(255,255,255,.09); --track: rgba(255,255,255,.09);
+    --auto: #a7cde2; --auto-ink: #0a1a22; --open: #ff9d42; --open-ink: #241100; --bad: #ff8f85; --glow: .18;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0b1211; --surface: #131d1c; --raised: #192523; --ink: #e8f0ee; --muted: #8ea29f; --line: #263735;
-  --auto: #3fc8b4; --auto-ink: #04201b; --open: #f39140; --open-ink: #2b1200; --bad: #ff8d83; --pipe: #51635f;
+  --bg: #0a0b0c; --surface: #121416; --ink: #f2f1ee; --muted: #8b8f93; --hair: rgba(255,255,255,.09); --track: rgba(255,255,255,.09);
+  --auto: #a7cde2; --auto-ink: #0a1a22; --open: #ff9d42; --open-ink: #241100; --bad: #ff8f85; --glow: .18;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, sans-serif;
-  padding-block: max(16px, env(safe-area-inset-top, 0px)) max(28px, env(safe-area-inset-bottom, 0px));
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-main { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; --accent: var(--muted); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.45 var(--sans); min-height: 100vh;
+  padding-block: max(18px, env(safe-area-inset-top, 0px)) max(30px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+main { position: relative; max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; --accent: var(--muted); }
+main::before { content: ""; position: absolute; left: 50%; top: 60px; width: 520px; height: 520px; transform: translateX(-50%); pointer-events: none;
+  background: radial-gradient(closest-side, var(--accent), transparent); opacity: var(--glow); transition: opacity .6s; z-index: 0; }
+main > * { position: relative; z-index: 1; }
 main[data-state="auto"] { --accent: var(--auto); }
 main[data-state="open"] { --accent: var(--open); }
 
-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 2px 0; }
-h1 { margin: 0; font: 700 22px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; }
-h1 small { display: block; margin-top: 5px; font: 400 11px/1 var(--mono); letter-spacing: .06em; color: var(--muted); text-transform: none; }
-.pill { display: inline-flex; align-items: center; gap: 7px; font: 600 12px/1 var(--mono); padding: 8px 11px; border: 1px solid var(--line);
-  border-radius: 99px; color: var(--muted); white-space: nowrap; background: var(--surface); }
-.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.pill.on { color: var(--auto); border-color: color-mix(in srgb, var(--auto) 50%, var(--line)); }
-.pill.warn { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mark { font: 500 13px/1 var(--sans); font-stretch: 125%; letter-spacing: .32em; text-transform: uppercase; }
+.mark small { display: block; margin-top: 7px; font: 400 10px/1 var(--mono); letter-spacing: .12em; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 8px; font: 500 11px/1 var(--mono); letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+.pill.on { color: var(--auto); }
+.pill.warn { color: var(--bad); }
 
-.hero { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 16px; position: relative; overflow: hidden; }
-.hero::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--accent); transition: background .3s; }
-.hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.mode { font: 700 34px/1 var(--display); letter-spacing: .04em; color: var(--accent); transition: color .3s; }
-.mode-sub { margin-top: 5px; font: 400 12px/1.3 var(--mono); color: var(--muted); max-width: 17ch; }
-.readout { text-align: right; font: 700 64px/0.85 var(--display); font-variant-numeric: tabular-nums; }
-.readout small { font-size: 24px; color: var(--muted); font-weight: 600; margin-left: 2px; }
-.readout .cap { display: block; margin-top: 8px; font: 400 11px/1 var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
-svg.pipe { display: block; width: 100%; height: auto; margin: 14px 0 6px; }
-svg.pipe .wall { fill: none; stroke: var(--pipe); stroke-width: 3; }
-svg.pipe .flow { stroke: var(--line); stroke-width: 2; stroke-dasharray: 3 7; stroke-linecap: round; fill: none; }
-svg.pipe .pin { fill: var(--surface); stroke: var(--accent); stroke-width: 3; transition: stroke .3s; }
-#plate { transform-origin: 130px 60px; transform: rotate(45deg); transition: transform .7s cubic-bezier(.3,.7,.2,1); }
-#plate line { stroke: var(--accent); stroke-width: 7; stroke-linecap: round; transition: stroke .3s; }
-.scale { display: flex; justify-content: space-between; font: 400 11px/1 var(--mono); color: var(--muted); }
-.detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); font: 400 12px/1.3 var(--mono); color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dial { position: relative; width: min(100%, 340px); aspect-ratio: 1; margin: 2px auto 0; }
+.dial svg.ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ring .track { fill: none; stroke: var(--track); stroke-width: 2.5; stroke-linecap: round; }
+.ring .arc { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100;
+  transition: stroke-dashoffset .9s cubic-bezier(.25,.8,.25,1), stroke .4s; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent)); }
+.ring .tick { stroke: var(--muted); stroke-width: 1.2; opacity: .55; }
+.ring .tick.major { stroke-width: 1.8; opacity: .9; }
+.core { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding-top: 6px; }
+svg.glyph { width: 84px; height: auto; overflow: visible; }
+.glyph .wall { stroke: var(--muted); stroke-width: 1.6; fill: none; opacity: .8; }
+#plate { transform-origin: 50px 30px; transform: rotate(45deg); transition: transform .9s cubic-bezier(.25,.8,.25,1); }
+#plate line { stroke: var(--accent); stroke-width: 3.2; stroke-linecap: round; transition: stroke .4s; }
+.glyph .pin { fill: var(--bg); stroke: var(--accent); stroke-width: 1.8; transition: stroke .4s; }
+.word { margin-top: 4px; font: 300 44px/1 var(--sans); font-stretch: 125%; letter-spacing: .01em; }
+.pct { font: 400 13px/1 var(--mono); color: var(--muted); letter-spacing: .08em; }
+.pct b { font-weight: 500; color: var(--ink); }
+.ends { position: absolute; left: 0; right: 0; bottom: 22%; display: flex; justify-content: space-between; padding: 0 14%; font: 400 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 
-.banner { border: 1px solid color-mix(in srgb, var(--bad) 60%, var(--line)); background: color-mix(in srgb, var(--bad) 9%, var(--surface));
-  color: var(--bad); border-radius: 12px; padding: 12px 14px; font-weight: 600; font-size: 15px; }
-.banner.info { border-color: color-mix(in srgb, var(--open) 55%, var(--line)); background: color-mix(in srgb, var(--open) 9%, var(--surface)); color: var(--ink); }
+.status { display: flex; align-items: baseline; justify-content: center; gap: 10px; flex-wrap: wrap; text-align: center; margin-top: -6px; }
+.mode { font: 600 12px/1 var(--sans); font-stretch: 125%; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); transition: color .4s; }
+.mode-sub { font: 400 12px/1.3 var(--mono); color: var(--muted); }
+.detail { text-align: center; font: 400 11px/1.3 var(--mono); letter-spacing: .06em; color: var(--muted); margin-top: -12px; }
+
+.banner { border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent); background: color-mix(in srgb, var(--bad) 8%, var(--surface)); color: var(--bad);
+  border-radius: 16px; padding: 13px 16px; font-size: 14px; font-weight: 500; line-height: 1.4; }
+.banner.info { border-color: color-mix(in srgb, var(--open) 50%, transparent); background: color-mix(in srgb, var(--open) 8%, var(--surface)); color: var(--ink); }
 .banner[hidden] { display: none; }
+
+.actions { display: flex; flex-direction: column; gap: 12px; }
+button { font: 600 15px/1.2 var(--sans); font-stretch: 112%; letter-spacing: .14em; text-transform: uppercase; border: 0; border-radius: 999px; padding: 0 22px;
+  min-height: 58px; cursor: pointer; touch-action: manipulation; position: relative; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+button:disabled { opacity: .34; cursor: not-allowed; }
+button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.b-connect { background: var(--ink); color: var(--bg); min-height: 64px; }
+.b-hero { background: var(--open); color: var(--open-ink); min-height: 76px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--open) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+.b-hero small { font: 400 10px/1 var(--mono); letter-spacing: .08em; text-transform: none; opacity: .8; }
 main[data-state="open"] .b-hero small { display: none; }
-
-.actions { display: flex; flex-direction: column; gap: 10px; }
-.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-button { font: 700 18px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; border: 0; border-radius: 14px; padding: 16px 12px;
-  min-height: 60px; cursor: pointer; touch-action: manipulation; position: relative; overflow: hidden; }
-button:disabled { opacity: .4; cursor: not-allowed; }
-button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
-.b-connect { background: var(--ink); color: var(--bg); min-height: 68px; font-size: 20px; }
-.b-hero { background: var(--open); color: var(--open-ink); min-height: 84px; font-size: 24px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.b-hero small { display: block; margin-top: 6px; font: 500 11px/1 var(--mono); letter-spacing: .04em; text-transform: none; opacity: .85; }
-.b-auto { background: var(--auto); color: var(--auto-ink); }
-.b-open { background: transparent; color: var(--open); border: 2px solid var(--open); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.fill { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(0,0,0,.28); pointer-events: none; }
-.b-open .fill { background: color-mix(in srgb, var(--open) 30%, transparent); }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.b-auto { background: transparent; color: var(--auto); box-shadow: inset 0 0 0 1.5px var(--auto); }
+.b-open { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--hair); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; font-size: 12px; letter-spacing: .1em; }
+.fill { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(0,0,0,.26); pointer-events: none; }
+.b-open .fill { background: color-mix(in srgb, var(--ink) 14%, transparent); }
 button span { position: relative; }
-.hint { margin: 0; font: 400 12px/1.4 var(--mono); color: var(--muted); text-align: center; }
+.hint { margin: 2px 0 0; text-align: center; font: 400 11px/1.5 var(--mono); letter-spacing: .03em; color: var(--muted); }
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 0 16px; }
-.card > summary { cursor: pointer; padding: 14px 0; font: 600 13px/1 var(--mono); letter-spacing: .05em; color: var(--muted); text-transform: uppercase; list-style: none; display: flex; justify-content: space-between; }
-.card > summary::-webkit-details-marker { display: none; }
-.card > summary::after { content: "+"; font-size: 16px; }
-.card[open] > summary::after { content: "–"; }
-.card .inner { padding: 2px 0 16px; display: flex; flex-direction: column; gap: 14px; }
-.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
-.steps b { font-weight: 600; }
-.note { margin: 0; font-size: 13px; color: var(--muted); }
-.field { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.field label { font-size: 15px; }
-.field .sub { display: block; font: 400 12px/1.35 var(--mono); color: var(--muted); margin-top: 3px; }
-select { font: 600 14px var(--mono); padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--raised); color: var(--ink); max-width: 48%; }
-.switch { position: relative; width: 52px; height: 30px; flex: none; }
+.list { border-top: 1px solid var(--hair); }
+.list > details { border-bottom: 1px solid var(--hair); }
+.list summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; padding: 18px 2px;
+  font: 500 12px/1 var(--sans); font-stretch: 118%; letter-spacing: .22em; text-transform: uppercase; }
+.list summary::-webkit-details-marker { display: none; }
+.list summary::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform .25s; margin-right: 4px; }
+.list details[open] summary::after { transform: rotate(-135deg); }
+.inner { padding: 0 2px 20px; display: flex; flex-direction: column; gap: 16px; font-size: 14px; color: var(--muted); }
+.inner b { color: var(--ink); font-weight: 600; }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.field { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.field label { color: var(--ink); font-size: 15px; font-weight: 500; }
+.field .sub { display: block; font: 400 11px/1.4 var(--mono); color: var(--muted); margin-top: 4px; letter-spacing: .02em; }
+select { font: 500 13px var(--mono); padding: 10px 12px; border-radius: 12px; border: 1px solid var(--hair); background: var(--surface); color: var(--ink); max-width: 46%; }
+.switch { position: relative; width: 54px; height: 32px; flex: none; }
 .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
-.switch i { position: absolute; inset: 0; border-radius: 99px; background: var(--line); transition: background .2s; }
-.switch i::after { content: ""; position: absolute; width: 24px; height: 24px; top: 3px; left: 3px; border-radius: 50%; background: var(--surface); transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
-.switch input:checked + i { background: var(--auto); }
+.switch i { position: absolute; inset: 0; border-radius: 99px; background: var(--track); transition: background .2s; }
+.switch i::after { content: ""; position: absolute; width: 26px; height: 26px; top: 3px; left: 3px; border-radius: 50%; background: var(--ink); transition: transform .22s cubic-bezier(.3,.8,.3,1); }
+.switch input:checked + i { background: color-mix(in srgb, var(--auto) 55%, var(--track)); }
 .switch input:checked + i::after { transform: translateX(22px); }
-.switch input:focus-visible + i { outline: 3px solid var(--ink); outline-offset: 2px; }
-.ghost { background: var(--raised); color: var(--ink); border: 1px solid var(--line); font-size: 14px; min-height: 46px; padding: 10px 12px; letter-spacing: .04em; }
+.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair); font-size: 11px; letter-spacing: .12em; min-height: 44px; padding: 0 16px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-pre { font: 400 11px/1.55 var(--mono); max-height: 240px; overflow: auto; margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--muted); }
-@media (prefers-reduced-motion: reduce) { #plate, .mode, .hero::after { transition: none; } }
-@media (max-width: 360px) { .readout { font-size: 52px; } .mode { font-size: 28px; } }
+.note { margin: 0; font-size: 12px; color: var(--muted); }
+pre { font: 400 11px/1.6 var(--mono); max-height: 240px; overflow: auto; margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .ring .arc, #plate, main::before { transition: none; } }
+@media (max-width: 360px) { .word { font-size: 36px; } }
 </style>
 
 <main data-state="off">
   <header>
-    <h1>Klepbediening<small>BMW 330e &middot; uitlaatklep</small></h1>
+    <div class="mark">Klepbediening<small>330e &middot; uitlaatklep</small></div>
     <span class="pill" id="conn" role="status" aria-live="polite">niet verbonden</span>
   </header>
 
   <div class="banner" id="banner" role="alert" hidden></div>
 
-  <section class="hero" aria-label="Klepstand">
-    <div class="hero-top">
-      <div>
-        <div class="mode" id="mode">AUTO</div>
-        <div class="mode-sub" id="modeSub">BMW regelt de klep</div>
-      </div>
-      <div class="readout"><span id="pct">--</span><small>%</small><span class="cap">klepstand</span></div>
-    </div>
-    <svg class="pipe" viewBox="0 0 260 120" role="img" aria-label="Schets van de uitlaatpijp met de klep">
-      <path class="wall" d="M6 22 H254 M6 98 H254"/>
-      <path class="flow" d="M14 60 H46 M214 60 H246"/>
-      <g id="plate"><line x1="130" y1="26" x2="130" y2="94"/></g>
-      <circle class="pin" cx="130" cy="60" r="7"/>
+  <section class="dial" aria-label="Klepstand">
+    <svg class="ring" viewBox="0 0 300 300" aria-hidden="true">
+      <path class="track" d="M47.8 209 A118 118 0 1 1 252.2 209" pathLength="100"/>
+      <path class="arc" id="arc" d="M47.8 209 A118 118 0 1 1 252.2 209" pathLength="100"/>
+      <g id="ticks"></g>
     </svg>
-    <div class="scale"><span>10 % open</span><span>90 % dicht</span></div>
-    <div class="detail"><span id="detail">opdracht -- %  ·  uitgang -- %</span></div>
+    <div class="core">
+      <svg class="glyph" viewBox="0 0 100 60" role="img" aria-label="Doorsnede van de uitlaatpijp met de klep">
+        <path class="wall" d="M6 6 H94 M6 54 H94"/>
+        <g id="plate"><line x1="50" y1="8" x2="50" y2="52"/></g>
+        <circle class="pin" cx="50" cy="30" r="3.6"/>
+      </svg>
+      <div class="word" id="word">--</div>
+      <div class="pct"><b id="pct">--</b> %</div>
+    </div>
+    <div class="ends"><span>Dicht</span><span>Open</span></div>
   </section>
+
+  <div class="status"><span class="mode" id="mode">AUTO</span><span class="mode-sub" id="modeSub">BMW regelt de klep</span></div>
+  <div class="detail" id="detail">opdracht -- % &nbsp;&middot;&nbsp; uitgang -- %</div>
 
   <section class="actions" aria-label="Bediening">
     <button class="b-connect" id="connect">Verbind met adapter</button>
 
     <button class="b-hero" id="openDetach" disabled><i class="fill" id="holdfill2"></i><span id="detachLabel">Open voor de rit</span>
-      <span><small>houd 1,2 s ingedrukt &middot; telefoon mag daarna uit</small></span></button>
+      <span><small>houd ingedrukt &middot; telefoon mag daarna uit</small></span></button>
 
     <div class="duo">
       <button class="b-auto" id="auto" disabled>AUTO</button>
-      <button class="b-open" id="open" disabled><i class="fill" id="holdfill"></i><span id="openLabel">Open en blijf verbonden</span></button>
+      <button class="b-open" id="open" disabled><i class="fill" id="holdfill"></i><span id="openLabel">Open, verbonden</span></button>
     </div>
     <p class="hint">Alleen stilstaand. Tijdens het rijden beantwoordt de auto geen stuurcommando.</p>
   </section>
 
-  <details class="card">
-    <summary>Zo werkt het</summary>
-    <div class="inner">
-      <ol class="steps">
-        <li><b>Stilstaand verbinden</b> met contact aan.</li>
-        <li><b>Open voor de rit</b> ingedrukt houden. De klep blijft open, ook als je telefoon uit of leeg is (gemeten: minstens 10 minuten stilstaand en tijdens een korte rit).</li>
-        <li><b>Terug naar de BMW:</b> contact uit en weer aan (gemeten), of stilstaand verbinden en AUTO kiezen.</li>
-      </ol>
-      <p class="note">Gebruik het alleen waar het geluid is toegestaan. Bedien de telefoon niet tijdens het rijden.</p>
-    </div>
-  </details>
-
-  <details class="card">
-    <summary>Instellingen</summary>
-    <div class="inner">
-      <div class="field">
-        <div><label for="keep">Blijf open</label><span class="sub">stuurt OPEN opnieuw als de BMW loslaat of de verbinding terugkomt (alleen bij "blijf verbonden")</span></div>
-        <span class="switch"><input type="checkbox" id="keep" checked><i></i></span>
+  <div class="list">
+    <details>
+      <summary>Zo werkt het</summary>
+      <div class="inner">
+        <ol class="steps">
+          <li><b>Stilstaand verbinden</b> met contact aan.</li>
+          <li><b>Open voor de rit</b> ingedrukt houden. De klep blijft open, ook als je telefoon uit of leeg is (gemeten: minstens 10 minuten stilstaand en tijdens een korte rit).</li>
+          <li><b>Terug naar de BMW:</b> contact uit en weer aan (gemeten), of stilstaand verbinden en AUTO kiezen.</li>
+        </ol>
+        <p class="note">Gebruik het alleen waar het geluid is toegestaan. Bedien de telefoon niet tijdens het rijden.</p>
       </div>
-      <div class="field">
-        <div><label for="timeout">Open blijft actief</label><span class="sub">alleen bij "blijf verbonden"</span></div>
-        <select id="timeout">
-          <option value="0" selected>Einde rit</option>
-          <option value="600">10 min</option><option value="1800">30 min</option><option value="3600">1 uur</option>
-        </select>
+    </details>
+    <details>
+      <summary>Instellingen</summary>
+      <div class="inner">
+        <div class="field">
+          <div><label for="keep">Blijf open</label><span class="sub">stuurt OPEN opnieuw als de BMW loslaat of de verbinding terugkomt (alleen bij "Open, verbonden")</span></div>
+          <span class="switch"><input type="checkbox" id="keep" checked><i></i></span>
+        </div>
+        <div class="field">
+          <div><label for="timeout">Open blijft actief</label><span class="sub">alleen bij "Open, verbonden"</span></div>
+          <select id="timeout">
+            <option value="0" selected>Einde rit</option>
+            <option value="600">10 min</option><option value="1800">30 min</option><option value="3600">1 uur</option>
+          </select>
+        </div>
       </div>
-    </div>
-  </details>
-
-  <details class="card">
-    <summary>Hulpmiddelen</summary>
-    <div class="inner">
-      <div class="row">
-        <button class="ghost" id="copyLog">Logboek kopiëren</button><span class="note" id="copyMsg"></span>
+    </details>
+    <details>
+      <summary>Hulpmiddelen</summary>
+      <div class="inner">
+        <div class="row"><button class="ghost" id="copyLog">Logboek kopiëren</button><span class="note" id="copyMsg"></span></div>
+        <pre id="log"></pre>
+        <div class="row">
+          <button class="ghost" id="demo">Demo zonder auto</button>
+          <button class="ghost" id="demoDrop" hidden>Demo: verbinding weg</button>
+          <button class="ghost" id="demoRel" hidden>Demo: BMW laat los</button>
+        </div>
       </div>
-      <pre id="log"></pre>
-      <div class="row">
-        <button class="ghost" id="demo">Demo zonder auto</button>
-        <button class="ghost" id="demoDrop" hidden>Demo: verbinding weg</button>
-        <button class="ghost" id="demoRel" hidden>Demo: BMW laat los</button>
-      </div>
-    </div>
-  </details>
+    </details>
+  </div>
 </main>
 
 <script>
@@ -312,13 +323,26 @@ pre { font: 400 11px/1.55 var(--mono); max-height: 240px; overflow: auto; margin
     var w = Math.max(0, Math.min(100, st.out));
     // 90 % = klep dwars in de pijp (dicht), 10 % = klep in de stroomrichting (open)
     $('plate').style.transform = 'rotate(' + (90 - w * 0.9) + 'deg)';
+    $('word').textContent = w >= 80 ? 'Dicht' : (w <= 20 ? 'Open' : 'Onderweg');
+    var openness = Math.max(0, Math.min(1, (90 - w) / 80));
+    $('arc').style.strokeDashoffset = String(100 - openness * 100);
   }
+  // schaalverdeling van de schijf: 17 streepjes (elke 5 %), grote streepjes bij 90/70/50/30/10 %
+  (function ticks() {
+    var g = $('ticks'), html = '';
+    for (var i = 0; i <= 16; i++) {
+      var a = (150 + 240 * (i / 16)) * Math.PI / 180, major = i % 4 === 0, r1 = major ? 126 : 130, r2 = 136;
+      html += '<line class="' + (major ? 'tick major' : 'tick') + '" x1="' + (150 + r1 * Math.cos(a)).toFixed(2) + '" y1="' + (150 + r1 * Math.sin(a)).toFixed(2) +
+              '" x2="' + (150 + r2 * Math.cos(a)).toFixed(2) + '" y2="' + (150 + r2 * Math.sin(a)).toFixed(2) + '"/>';
+    }
+    g.innerHTML = html;
+  })();
   function look(state) { document.querySelector('main').setAttribute('data-state', state); }
   function setMode(m) {
     s.mode = m;
     $('mode').textContent = m;
     $('modeSub').textContent = m === 'AUTO' ? 'BMW regelt de klep' : 'jouw opdracht is actief';
-    $('openLabel').textContent = m === 'OPEN' ? 'Open, verbonden' : 'Open en blijf verbonden';
+    $('openLabel').textContent = 'Open, verbonden';
     $('detachLabel').textContent = m === 'OPEN' ? 'Open actief' : 'Open voor de rit';
     look(!s.adapter && m === 'AUTO' ? 'off' : (m === 'OPEN' ? 'open' : 'auto'));
     refreshButtons();
@@ -523,7 +547,7 @@ pre { font: 400 11px/1.55 var(--mono); max-height: 240px; overflow: auto; margin
     btn.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !t) begin(e); });
     btn.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') end(false); });
   }
-  bindHold($('open'), $('holdfill'), $('openLabel'), 'Open en blijf verbonden', function () { doOpen(false); });
+  bindHold($('open'), $('holdfill'), $('openLabel'), 'Open, verbonden', function () { doOpen(false); });
   bindHold($('openDetach'), $('holdfill2'), $('detachLabel'), 'Open voor de rit', function () { doOpen(true); });
   setMode('AUTO');
 
