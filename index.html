@@ -83,15 +83,15 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
     <button class="btn-auto" id="auto" disabled>AUTO · BMW regelt</button>
     <button class="btn-open" id="open" disabled><i class="fill" id="holdfill"></i><span id="openLabel">OPEN · houd ingedrukt</span></button>
     <div class="row">
-      <label for="timeout">Terug naar AUTO na</label>
+      <label for="timeout">OPEN blijft actief</label>
       <select id="timeout">
-        <option value="120">2 min</option><option value="300">5 min</option>
-        <option value="600" selected>10 min</option><option value="1800">30 min</option>
+        <option value="0" selected>Einde rit (geen limiet)</option>
+        <option value="600">10 min</option><option value="1800">30 min</option><option value="3600">1 uur</option>
       </select>
     </div>
   </section>
 
-  <p class="note">Bedien alleen als het veilig en toegestaan is, nooit met de telefoon in de hand tijdens het rijden. AUTO geeft de regeling altijd terug aan de BMW. Wat de motorcomputer doet als de verbinding wegvalt tijdens OPEN is niet bewezen: de pagina probeert opnieuw te verbinden en dan AUTO te sturen.</p>
+  <p class="note">Bedien alleen als het veilig en toegestaan is, nooit met de telefoon in de hand tijdens het rijden. AUTO geeft de regeling altijd terug aan de BMW. Hoe lang de motorcomputer een overname vasthoudt en wat hij doet als de verbinding wegvalt tijdens OPEN is niet bewezen (getest: ruim een minuut). Houd Bluefy open en het scherm aan; valt de verbinding weg, dan probeert de pagina opnieuw te verbinden en stuurt ze AUTO.</p>
 
   <div class="row">
     <button class="btn-ghost" id="demo">Demo zonder auto</button>
@@ -115,7 +115,7 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   var ALLOWED = SETUP.concat([READ1, READ2, OPEN, RETURN]);
   var HOLD_MS = 1200, POLL_MS = 3000, CMD_TIMEOUT = 8000;
 
-  var s = { adapter: null, mode: 'AUTO', timer: null, poll: null, reconnecting: false, busy: false, demo: false, wake: null };
+  var s = { adapter: null, mode: 'AUTO', timer: null, poll: null, reconnecting: false, busy: false, demo: false, wake: null, fails: 0 };
 
   function log(t) { var p = $('log'); p.textContent = (new Date().toLocaleTimeString() + '  ' + t + '\n' + p.textContent).slice(0, 6000); }
   function banner(t) { $('banner').hidden = !t; $('banner').textContent = t || ''; }
@@ -186,7 +186,10 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   }
   function parseUds(text) {
     var line = text.split(/[\r\n]+/).map(function (l) { return l.trim(); }).filter(function (l) { return /^612(\s+[0-9A-Fa-f]{2})+$/.test(l); })[0];
-    if (!line) throw new Error('Onverwacht antwoord: ' + text.trim().slice(0, 40));
+    if (!line) {
+      if (/NO DATA/i.test(text)) throw new Error('geen antwoord van de motorcomputer (NO DATA)');
+      throw new Error('Onverwacht antwoord: ' + text.trim().slice(0, 40));
+    }
     var b = line.split(/\s+/).slice(1).map(function (h) { return parseInt(h, 16); });
     if (b[0] !== 0xF1 || (b[1] >> 4) !== 0) throw new Error('Onverwacht frame');
     return b.slice(2, 2 + (b[1] & 15));
@@ -227,7 +230,7 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   function refreshButtons() {
     var ready = !!s.adapter && !s.reconnecting;
     $('auto').disabled = !s.adapter || s.reconnecting;
-    $('open').disabled = !ready || s.mode === 'OPEN' || s.busy;
+    $('open').disabled = !ready || s.mode === 'OPEN' || s.busy || s.fails >= 2;
     $('connect').hidden = !!s.adapter;
     $('demoDrop').hidden = !s.demo || !s.adapter;
   }
@@ -274,11 +277,15 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
       if (s.busy || s.reconnecting || !s.adapter) return;
       try {
         var st = await readState(); show(st);
+        if (s.fails > 0) { s.fails = 0; banner(''); conn(s.mode === 'OPEN' ? 'OPEN actief' : 'verbonden', 'on'); refreshButtons(); }
         if (s.mode === 'OPEN' && st.out > 12 && st.cmd > 12) {
           banner('De motorcomputer heeft de overname beëindigd. AUTO wordt teruggegeven.');
           await toAuto(true);
         }
-      } catch (e) { log('Poll: ' + e.message); }
+      } catch (e) {
+        log('Poll: ' + e.message); s.fails++;
+        if (s.fails === 2) { banner('Geen antwoord van de motorcomputer. Staat het contact aan? Wacht even en probeer opnieuw.'); conn('geen antwoord', 'warn'); refreshButtons(); }
+      }
     }, POLL_MS);
   }
   function stopPoll() { if (s.poll) { clearInterval(s.poll); s.poll = null; } }
@@ -287,17 +294,21 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   async function doOpen() {
     if (s.busy || s.mode === 'OPEN') return;
     s.busy = true; refreshButtons(); banner('');
+    var sent = false;
     try {
       var st = await readState(); show(st);
       if (st.cmd !== 90 || st.out !== 90) { banner('De BMW-regeling stuurt de klep nu zelf (' + st.out.toFixed(0) + ' %). OPEN is niet nodig of niet veilig.'); return; }
+      sent = true;
       await control(OPEN);
       setMode('OPEN'); conn('OPEN actief', 'on');
       var secs = parseInt($('timeout').value, 10);
-      clearOpenTimer(); s.timer = setTimeout(function () { banner('Tijd om: terug naar AUTO.'); toAuto(true); }, secs * 1000);
+      clearOpenTimer();
+      if (secs > 0) s.timer = setTimeout(function () { banner('Tijd om: terug naar AUTO.'); toAuto(true); }, secs * 1000);
       show(await readState());
     } catch (e) {
-      log('OPEN fout: ' + e.message); banner('OPEN mislukt: ' + e.message + ' AUTO wordt teruggegeven.');
-      await toAuto(true);
+      log('OPEN fout: ' + e.message);
+      if (!sent) { banner('OPEN niet gestuurd: ' + e.message + '. Er is niets naar de klep gestuurd.'); }
+      else { banner('OPEN mislukt: ' + e.message + ' AUTO wordt teruggegeven.'); await toAuto(true); }
     } finally { s.busy = false; refreshButtons(); }
   }
 
@@ -346,6 +357,9 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   $('demo').addEventListener('click', function () { connect(true); });
   $('demoDrop').addEventListener('click', function () { if (s.adapter) { var a = s.adapter; a.up = false; onDrop(); setTimeout(function () { a.up = true; }, 4000); } });
   $('auto').addEventListener('click', function () { banner(''); toAuto(false); });
+
+  try { var saved = localStorage.getItem('klepTimeout'); if (saved !== null && $('timeout').querySelector('option[value="' + saved + '"]')) $('timeout').value = saved; } catch (e) {}
+  $('timeout').addEventListener('change', function () { try { localStorage.setItem('klepTimeout', $('timeout').value); } catch (e) {} });
 
   var holdT = null, holdRaf = null, holdStart = 0;
   function holdBegin(ev) {
