@@ -82,6 +82,9 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
     <button class="btn-main" id="connect">Verbinden met adapter</button>
     <button class="btn-auto" id="auto" disabled>AUTO · BMW regelt</button>
     <button class="btn-open" id="open" disabled><i class="fill" id="holdfill"></i><span id="openLabel">OPEN · houd ingedrukt</span></button>
+    <button class="btn-open" id="openDetach" disabled><i class="fill" id="holdfill2"></i><span id="detachLabel">OPEN en loskoppelen · houd ingedrukt</span></button>
+    <p class="note" style="margin:0">Loskoppelen: de motorcomputer hield de overname 10 minuten vast zonder verbinding (gemeten, stilstaand). Een contactwissel geeft de regeling terug aan de BMW (gemeten). Rijden en lang vasthouden zijn niet getest.</p>
+    <label class="row" style="gap:10px;align-items:flex-start"><input type="checkbox" id="keep" checked style="width:22px;height:22px;margin-top:2px"><span>Blijf open: stuur OPEN opnieuw als de BMW de overname loslaat of de verbinding terugkomt. Stopt pas bij AUTO.</span></label>
     <div class="row">
       <label for="timeout">OPEN blijft actief</label>
       <select id="timeout">
@@ -96,9 +99,10 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   <div class="row">
     <button class="btn-ghost" id="demo">Demo zonder auto</button>
     <button class="btn-ghost" id="demoDrop" hidden>Demo: verbinding verbreken</button>
+    <button class="btn-ghost" id="demoRel" hidden>Demo: BMW laat los</button>
   </div>
 
-  <details class="card"><summary>Logboek</summary><pre id="log"></pre></details>
+  <details class="card"><summary>Logboek</summary><div class="row" style="margin-top:8px"><button class="btn-ghost" id="copyLog">Logboek kopiëren</button><span class="note" id="copyMsg"></span></div><pre id="log"></pre></details>
 </main>
 
 <script>
@@ -115,9 +119,9 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   var ALLOWED = SETUP.concat([READ1, READ2, OPEN, RETURN]);
   var HOLD_MS = 1200, POLL_MS = 3000, CMD_TIMEOUT = 8000;
 
-  var s = { adapter: null, mode: 'AUTO', timer: null, poll: null, reconnecting: false, busy: false, demo: false, wake: null, fails: 0 };
+  var s = { adapter: null, mode: 'AUTO', timer: null, poll: null, reconnecting: false, busy: false, demo: false, wake: null, fails: 0, reTimes: [], detached: false };
 
-  function log(t) { var p = $('log'); p.textContent = (new Date().toLocaleTimeString() + '  ' + t + '\n' + p.textContent).slice(0, 6000); }
+  function log(t) { var p = $('log'); p.textContent = (new Date().toLocaleTimeString() + '  ' + t + '\n' + p.textContent).slice(0, 20000); }
   function banner(t) { $('banner').hidden = !t; $('banner').textContent = t || ''; }
   function conn(t, cls) { var e = $('conn'); e.textContent = t; e.className = 'pill ' + (cls || ''); }
 
@@ -231,8 +235,10 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
     var ready = !!s.adapter && !s.reconnecting;
     $('auto').disabled = !s.adapter || s.reconnecting;
     $('open').disabled = !ready || s.mode === 'OPEN' || s.busy || s.fails >= 2;
+    $('openDetach').disabled = $('open').disabled;
     $('connect').hidden = !!s.adapter;
     $('demoDrop').hidden = !s.demo || !s.adapter;
+    $('demoRel').hidden = !s.demo || !s.adapter;
   }
 
   async function runSetup() {
@@ -246,6 +252,10 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
     await runSetup();
     var st = await readState(); show(st);
     conn('verbonden', 'on'); banner('');
+    if (st.out <= 12 && st.cmd <= 12 && s.mode !== 'OPEN') {
+      setMode('OPEN'); conn('OPEN actief', 'on');
+      banner('De klep staat open (jouw overname of de BMW zelf). Kies AUTO om de regeling terug te geven.');
+    }
     try { if (navigator.wakeLock) s.wake = await navigator.wakeLock.request('screen'); } catch (e) {}
     startPoll();
     refreshButtons();
@@ -279,8 +289,18 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
         var st = await readState(); show(st);
         if (s.fails > 0) { s.fails = 0; banner(''); conn(s.mode === 'OPEN' ? 'OPEN actief' : 'verbonden', 'on'); refreshButtons(); }
         if (s.mode === 'OPEN' && st.out > 12 && st.cmd > 12) {
-          banner('De motorcomputer heeft de overname beëindigd. AUTO wordt teruggegeven.');
-          await toAuto(true);
+          var now = Date.now();
+          s.reTimes = s.reTimes.filter(function (t) { return now - t < 60000; });
+          if ($('keep').checked && s.reTimes.length < 5) {
+            s.reTimes.push(now); s.busy = true;
+            log('BMW liet de overname los; OPEN opnieuw gestuurd (' + s.reTimes.length + 'x in 1 min)');
+            banner('De BMW liet de overname los. OPEN is opnieuw gestuurd.');
+            try { await control(OPEN); show(await readState()); } catch (e) { log('Opnieuw OPEN mislukt: ' + e.message); }
+            s.busy = false;
+          } else {
+            banner($('keep').checked ? 'De BMW houdt de klep steeds dicht. AUTO wordt teruggegeven.' : 'De motorcomputer heeft de overname beëindigd. AUTO wordt teruggegeven.');
+            await toAuto(true);
+          }
         }
       } catch (e) {
         log('Poll: ' + e.message); s.fails++;
@@ -291,7 +311,7 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
   function stopPoll() { if (s.poll) { clearInterval(s.poll); s.poll = null; } }
   function clearOpenTimer() { if (s.timer) { clearTimeout(s.timer); s.timer = null; } }
 
-  async function doOpen() {
+  async function doOpen(detach) {
     if (s.busy || s.mode === 'OPEN') return;
     s.busy = true; refreshButtons(); banner('');
     var sent = false;
@@ -305,6 +325,13 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
       clearOpenTimer();
       if (secs > 0) s.timer = setTimeout(function () { banner('Tijd om: terug naar AUTO.'); toAuto(true); }, secs * 1000);
       show(await readState());
+      if (detach) {
+        clearOpenTimer(); stopPoll(); s.detached = true;
+        log('Loskoppelen: overname actief, verbinding wordt verbroken');
+        banner('OPEN actief zonder verbinding. Verbind opnieuw en kies AUTO, of zet het contact uit en weer aan.');
+        s.adapter.disconnect();
+        if (s.demo) setTimeout(onDrop, 0);
+      }
     } catch (e) {
       log('OPEN fout: ' + e.message);
       if (!sent) { banner('OPEN niet gestuurd: ' + e.message + '. Er is niets naar de klep gestuurd.'); }
@@ -335,13 +362,18 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
 
   async function onDrop() {
     log('Verbinding weg');
+    if (s.detached) {
+      s.detached = false; s.adapter = null; stopPoll();
+      setMode('OPEN'); $('modeSub').textContent = 'zonder verbinding'; conn('los · OPEN actief', 'on'); refreshButtons(); return;
+    }
     var wasOpen = s.mode === 'OPEN';
     stopPoll();
     if (!wasOpen) { s.adapter = null; conn('niet verbonden', 'warn'); setMode('AUTO'); refreshButtons(); return; }
+    var keep = $('keep').checked;
     s.reconnecting = true; refreshButtons(); conn('verbinding weg', 'warn');
-    banner('Verbinding weg tijdens OPEN. Er wordt opnieuw verbonden om AUTO te sturen.');
-    var start = Date.now(), ok = false;
-    while (Date.now() - start < 90000 && !ok) {
+    banner(keep ? 'Verbinding weg tijdens OPEN. De pagina verbindt opnieuw en hervat OPEN. Houd Bluefy open.' : 'Verbinding weg tijdens OPEN. Er wordt opnieuw verbonden om AUTO te sturen.');
+    var start = Date.now(), ok = false, limit = keep ? 600000 : 90000;
+    while (Date.now() - start < limit && !ok) {
       try {
         await s.adapter.connect(); await runSetup(); ok = true;
       } catch (e) { await new Promise(function (r) { setTimeout(r, 2000); }); }
@@ -349,38 +381,56 @@ pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin:
     s.reconnecting = false;
     if (!ok) { s.adapter = null; setMode('AUTO'); conn('niet verbonden', 'warn');
       banner('Opnieuw verbinden is niet gelukt. Staat de klep nog open? Zet het contact uit en weer aan, of verbind opnieuw en kies AUTO.'); refreshButtons(); return; }
-    startPoll(); await toAuto(false); banner('Verbinding hersteld en AUTO teruggegeven.');
+    startPoll();
+    if (!keep) { await toAuto(false); banner('Verbinding hersteld en AUTO teruggegeven.'); return; }
+    try {
+      var st = await readState(); show(st);
+      if (st.out > 12 && st.cmd > 12) await control(OPEN);
+      show(await readState()); conn('OPEN actief', 'on'); banner('Verbinding hersteld; OPEN is hervat.');
+    } catch (e) { banner('Verbinding hersteld, maar OPEN hervatten mislukte: ' + e.message + ' AUTO wordt teruggegeven.'); await toAuto(true); }
+    refreshButtons();
   }
 
   /* ---------- controls ---------- */
   $('connect').addEventListener('click', function () { connect(false); });
   $('demo').addEventListener('click', function () { connect(true); });
   $('demoDrop').addEventListener('click', function () { if (s.adapter) { var a = s.adapter; a.up = false; onDrop(); setTimeout(function () { a.up = true; }, 4000); } });
+  $('demoRel').addEventListener('click', function () { if (s.adapter && s.adapter.pct !== undefined) s.adapter.pct = 90; });
+  try { var k = localStorage.getItem('klepKeep'); if (k !== null) $('keep').checked = k === '1'; } catch (e) {}
+  $('keep').addEventListener('change', function () { try { localStorage.setItem('klepKeep', $('keep').checked ? '1' : '0'); } catch (e) {} });
+  $('copyLog').addEventListener('click', function () {
+    var text = $('log').textContent.split('\n').reverse().join('\n');
+    var done = function (ok) { $('copyMsg').textContent = ok ? 'gekopieerd' : 'kopiëren mislukt: selecteer de tekst met de hand'; };
+    try { navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
+  });
   $('auto').addEventListener('click', function () { banner(''); toAuto(false); });
 
   try { var saved = localStorage.getItem('klepTimeout'); if (saved !== null && $('timeout').querySelector('option[value="' + saved + '"]')) $('timeout').value = saved; } catch (e) {}
   $('timeout').addEventListener('change', function () { try { localStorage.setItem('klepTimeout', $('timeout').value); } catch (e) {} });
 
-  var holdT = null, holdRaf = null, holdStart = 0;
-  function holdBegin(ev) {
-    if ($('open').disabled) return; ev.preventDefault();
-    holdStart = Date.now(); $('openLabel').textContent = 'blijf vasthouden…';
-    holdT = setTimeout(function () { holdEnd(true); }, HOLD_MS);
-    (function tick() { var f = Math.min(1, (Date.now() - holdStart) / HOLD_MS); $('holdfill').style.width = (f * 100) + '%'; if (holdT) holdRaf = requestAnimationFrame(tick); })();
+  function bindHold(btn, fill, label, idleText, fire) {
+    var t = null, raf = null, t0 = 0;
+    function begin(ev) {
+      if (btn.disabled) return; ev.preventDefault();
+      t0 = Date.now(); label.textContent = 'blijf vasthouden…';
+      t = setTimeout(function () { end(true); }, HOLD_MS);
+      (function tick() { var f = Math.min(1, (Date.now() - t0) / HOLD_MS); fill.style.width = (f * 100) + '%'; if (t) raf = requestAnimationFrame(tick); })();
+    }
+    function end(go) {
+      if (t) { clearTimeout(t); t = null; }
+      if (raf) cancelAnimationFrame(raf);
+      fill.style.width = '0';
+      if (s.mode !== 'OPEN') label.textContent = idleText;
+      if (go === true) fire();
+    }
+    btn.addEventListener('pointerdown', begin);
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (n) { btn.addEventListener(n, function () { end(false); }); });
+    btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    btn.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !t) begin(e); });
+    btn.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') end(false); });
   }
-  function holdEnd(fire) {
-    if (holdT) { clearTimeout(holdT); holdT = null; }
-    if (holdRaf) cancelAnimationFrame(holdRaf);
-    $('holdfill').style.width = '0';
-    if (s.mode !== 'OPEN') $('openLabel').textContent = 'OPEN · houd ingedrukt';
-    if (fire === true) doOpen();
-  }
-  var ob = $('open');
-  ob.addEventListener('pointerdown', holdBegin);
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (n) { ob.addEventListener(n, function () { holdEnd(false); }); });
-  ob.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  ob.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !holdT) holdBegin(e); });
-  ob.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') holdEnd(false); });
+  bindHold($('open'), $('holdfill'), $('openLabel'), 'OPEN · houd ingedrukt', function () { doOpen(false); });
+  bindHold($('openDetach'), $('holdfill2'), $('detachLabel'), 'OPEN en loskoppelen · houd ingedrukt', function () { doOpen(true); });
 
   // Hand control back if the page is closed or hidden for long while OPEN.
   document.addEventListener('visibilitychange', function () {
