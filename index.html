@@ -1,0 +1,377 @@
+<meta charset="utf-8">
+<title>Klepbediening</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow instrument column. Status read-out on top, AUTO/OPEN controls below, log folded away. */
+:root {
+  --bg: #eef1f1; --surface: #ffffff; --ink: #14201f; --muted: #5b6a68; --line: #cfd8d6;
+  --auto: #0b7a6e; --auto-ink: #ffffff; --open: #c25a0c; --open-ink: #ffffff; --bad: #b3261e;
+  --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1615; --surface: #16211f; --ink: #e6efed; --muted: #8fa3a0; --line: #2a3b38;
+    --auto: #38c2af; --auto-ink: #05211d; --open: #f08a3c; --open-ink: #2a1100; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1615; --surface: #16211f; --ink: #e6efed; --muted: #8fa3a0; --line: #2a3b38;
+  --auto: #38c2af; --auto-ink: #05211d; --open: #f08a3c; --open-ink: #2a1100; --bad: #ff8a80;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, sans-serif; margin: 0;
+  padding-block: 16px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { font: 700 26px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+.pill { font: 600 12px/1 var(--mono); padding: 7px 10px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); white-space: nowrap; }
+.pill.on { color: var(--auto); border-color: var(--auto); }
+.pill.warn { color: var(--bad); border-color: var(--bad); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.readout { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6px 12px; }
+.big { font: 700 72px/0.9 var(--display); font-variant-numeric: tabular-nums; }
+.big small { font-size: 28px; color: var(--muted); }
+.state { font: 600 13px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: right; }
+.bar { grid-column: 1 / -1; height: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; position: relative; }
+.bar i { position: absolute; inset: 0 auto 0 0; width: 90%; background: var(--auto); transition: width .4s, background .2s; }
+.bar.open i { background: var(--open); }
+.sub { grid-column: 1 / -1; color: var(--muted); font: 400 12px/1.4 var(--mono); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.banner { border: 1px solid var(--bad); color: var(--bad); border-radius: 10px; padding: 12px 14px; font-weight: 600; }
+.banner[hidden] { display: none; }
+.controls { display: grid; gap: 10px; }
+button { font: 700 22px/1 var(--display); letter-spacing: .05em; text-transform: uppercase; border: 0; border-radius: 10px; padding: 20px 16px; cursor: pointer; min-height: 64px; touch-action: manipulation; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.btn-main { background: var(--ink); color: var(--bg); }
+.btn-auto { background: var(--auto); color: var(--auto-ink); }
+.btn-open { background: var(--open); color: var(--open-ink); position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.btn-open .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(0,0,0,.28); }
+.btn-open span { position: relative; }
+.btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-size: 16px; min-height: 48px; padding: 12px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+label { font: 600 13px/1.3 var(--mono); color: var(--muted); }
+select { font: 600 15px var(--mono); padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.note { color: var(--muted); font-size: 13px; }
+details summary { cursor: pointer; font: 600 13px var(--mono); color: var(--muted); }
+pre { font: 400 11px/1.5 var(--mono); max-height: 220px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; word-break: break-all; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+
+<main>
+  <header>
+    <h1>Klepbediening</h1>
+    <span class="pill" id="conn" role="status">niet verbonden</span>
+  </header>
+
+  <div class="banner" id="banner" role="alert" hidden></div>
+
+  <section class="card readout" aria-label="Klepstand">
+    <div class="big"><span id="pct">--</span><small> %</small></div>
+    <div class="state" id="mode">AUTO<br><span id="modeSub" style="color:var(--muted)">BMW-regeling</span></div>
+    <div class="bar" id="bar"><i id="barfill"></i></div>
+    <div class="sub"><span>10 % open</span><span id="detail">opdracht / uitgang: --</span><span>90 % dicht</span></div>
+  </section>
+
+  <section class="controls" aria-label="Bediening">
+    <button class="btn-main" id="connect">Verbinden met adapter</button>
+    <button class="btn-auto" id="auto" disabled>AUTO · BMW regelt</button>
+    <button class="btn-open" id="open" disabled><i class="fill" id="holdfill"></i><span id="openLabel">OPEN · houd ingedrukt</span></button>
+    <div class="row">
+      <label for="timeout">Terug naar AUTO na</label>
+      <select id="timeout">
+        <option value="120">2 min</option><option value="300">5 min</option>
+        <option value="600" selected>10 min</option><option value="1800">30 min</option>
+      </select>
+    </div>
+  </section>
+
+  <p class="note">Bedien alleen als het veilig en toegestaan is, nooit met de telefoon in de hand tijdens het rijden. AUTO geeft de regeling altijd terug aan de BMW. Wat de motorcomputer doet als de verbinding wegvalt tijdens OPEN is niet bewezen: de pagina probeert opnieuw te verbinden en dan AUTO te sturen.</p>
+
+  <div class="row">
+    <button class="btn-ghost" id="demo">Demo zonder auto</button>
+    <button class="btn-ghost" id="demoDrop" hidden>Demo: verbinding verbreken</button>
+  </div>
+
+  <details class="card"><summary>Logboek</summary><pre id="log"></pre></details>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var SERVICE = '000018f0-0000-1000-8000-00805f9b34fb';
+  var RX = '00002af0-0000-1000-8000-00805f9b34fb';   // notify
+  var TX = '00002af1-0000-1000-8000-00805f9b34fb';   // write
+  // Exact command set verified from the Mac scripts; nothing else may be sent.
+  var SETUP = ['ATD','ATM0','ATE0','ATL0','ATS1','ATH1','ATD0','ATPB8101','ATTPB','ATBI','ATSH6F1','ATCRA612',
+               'ATCFC0','ATCAF1','ATCEA12','ATCERF1','ATFCSH6F1','ATFCSD1230000A','ATFCSM1','ATCFC1','ATAT0','ATSTFF'];
+  var READ1 = '2262FD', READ2 = '2264FD', OPEN = '2F60FD0303E8', RETURN = '2F60FD00';
+  var ALLOWED = SETUP.concat([READ1, READ2, OPEN, RETURN]);
+  var HOLD_MS = 1200, POLL_MS = 3000, CMD_TIMEOUT = 8000;
+
+  var s = { adapter: null, mode: 'AUTO', timer: null, poll: null, reconnecting: false, busy: false, demo: false, wake: null };
+
+  function log(t) { var p = $('log'); p.textContent = (new Date().toLocaleTimeString() + '  ' + t + '\n' + p.textContent).slice(0, 6000); }
+  function banner(t) { $('banner').hidden = !t; $('banner').textContent = t || ''; }
+  function conn(t, cls) { var e = $('conn'); e.textContent = t; e.className = 'pill ' + (cls || ''); }
+
+  /* ---------- adapter layer (real BLE or demo) ---------- */
+  function RealAdapter(device) {
+    this.device = device; this.server = null; this.tx = null; this.buf = ''; this.waiter = null;
+  }
+  RealAdapter.prototype.connect = async function () {
+    var self = this;
+    self.server = await self.device.gatt.connect();
+    var svc = await self.server.getPrimaryService(SERVICE);
+    var rx = await svc.getCharacteristic(RX);
+    self.tx = await svc.getCharacteristic(TX);
+    await rx.startNotifications();
+    rx.addEventListener('characteristicvaluechanged', function (ev) {
+      self.buf += new TextDecoder('ascii').decode(ev.target.value);
+      if (self.buf.indexOf('>') >= 0 && self.waiter) { var w = self.waiter; self.waiter = null; w(); }
+    });
+  };
+  RealAdapter.prototype.write = function (cmd) {
+    var self = this;
+    self.buf = '';
+    var done = new Promise(function (res, rej) {
+      self.waiter = res;
+      setTimeout(function () { if (self.waiter === res) { self.waiter = null; rej(new Error('Geen antwoord op ' + cmd)); } }, CMD_TIMEOUT);
+    });
+    var data = new TextEncoder().encode(cmd + '\r');
+    var w = self.tx.writeValueWithResponse ? self.tx.writeValueWithResponse(data) : self.tx.writeValue(data);
+    return Promise.resolve(w).then(function () { return done; }).then(function () {
+      return self.buf.split('>')[0];
+    });
+  };
+  RealAdapter.prototype.disconnect = function () { try { this.device.gatt.disconnect(); } catch (e) {} };
+  RealAdapter.prototype.connected = function () { return !!(this.device.gatt && this.device.gatt.connected); };
+
+  function DemoAdapter() { this.pct = 90; this.up = false; this.onDrop = null; }
+  DemoAdapter.prototype.connect = function () { this.up = true; return Promise.resolve(); };
+  DemoAdapter.prototype.write = function (cmd) {
+    var self = this;
+    return new Promise(function (res, rej) {
+      setTimeout(function () {
+        if (!self.up) return rej(new Error('Verbinding weg'));
+        var v = Math.round(self.pct * 100), hex = ('0000' + (v & 0xffff).toString(16)).slice(-4).toUpperCase();
+        if (cmd === READ1) res('612 F1 05 62 62 FD ' + hex.slice(0, 2) + ' ' + hex.slice(2) + '\r');
+        else if (cmd === READ2) res('612 F1 05 62 64 FD ' + hex.slice(0, 2) + ' ' + hex.slice(2) + '\r');
+        else if (cmd === OPEN) { self.pct = 10; res('612 F1 04 6F 60 FD 03 \r'); }
+        else if (cmd === RETURN) { self.pct = 90; res('612 F1 04 6F 60 FD 00 \r'); }
+        else res('OK\r');
+      }, 120);
+    });
+  };
+  DemoAdapter.prototype.disconnect = function () { this.up = false; };
+  DemoAdapter.prototype.connected = function () { return this.up; };
+
+  /* ---------- command layer: serialized, whitelisted ---------- */
+  var chain = Promise.resolve();
+  function send(cmd) {
+    if (ALLOWED.indexOf(cmd) < 0) return Promise.reject(new Error('Commando niet toegestaan: ' + cmd));
+    var run = function () {
+      if (!s.adapter) return Promise.reject(new Error('Niet verbonden'));
+      return s.adapter.write(cmd).then(function (text) { log(cmd + ' -> ' + text.replace(/\s+/g, ' ').trim()); return text; });
+    };
+    var p = chain.then(run, run);
+    chain = p.catch(function () {});
+    return p;
+  }
+  function parseUds(text) {
+    var line = text.split(/[\r\n]+/).map(function (l) { return l.trim(); }).filter(function (l) { return /^612(\s+[0-9A-Fa-f]{2})+$/.test(l); })[0];
+    if (!line) throw new Error('Onverwacht antwoord: ' + text.trim().slice(0, 40));
+    var b = line.split(/\s+/).slice(1).map(function (h) { return parseInt(h, 16); });
+    if (b[0] !== 0xF1 || (b[1] >> 4) !== 0) throw new Error('Onverwacht frame');
+    return b.slice(2, 2 + (b[1] & 15));
+  }
+  function pctFrom(payload, did) {
+    if (payload.length === 3 && payload[0] === 0x7F) throw new Error('Geweigerd (code ' + payload[2].toString(16).toUpperCase() + ')');
+    if (payload.length !== 5 || payload[0] !== 0x62 || payload[1] !== did || payload[2] !== 0xFD) throw new Error('Onverwachte waarde');
+    var v = (payload[3] << 8) | payload[4]; if (v > 32767) v -= 65536; return v / 100;
+  }
+  async function readState() {
+    var a = pctFrom(parseUds(await send(READ1)), 0x62);
+    var b = pctFrom(parseUds(await send(READ2)), 0x64);
+    return { cmd: a, out: b };
+  }
+  async function control(cmd, expect) {
+    var p = parseUds(await send(cmd));
+    if (p.length === 3 && p[0] === 0x7F) throw new Error('Geweigerd (code ' + p[2].toString(16).toUpperCase() + ')');
+    if (p[0] !== 0x6F || p[1] !== 0x60 || p[2] !== 0xFD) throw new Error('Onverwacht antwoord');
+    return p;
+  }
+
+  /* ---------- UI state ---------- */
+  function show(st) {
+    if (st) {
+      $('pct').textContent = st.out.toFixed(0);
+      $('detail').textContent = 'opdracht ' + st.cmd.toFixed(0) + ' / uitgang ' + st.out.toFixed(0);
+      var w = Math.max(0, Math.min(100, st.out)); $('barfill').style.width = w + '%';
+      $('bar').className = 'bar' + (st.out <= 12 ? ' open' : '');
+    }
+  }
+  function setMode(m) {
+    s.mode = m;
+    $('mode').firstChild.nodeValue = m;
+    $('modeSub').textContent = m === 'AUTO' ? 'BMW-regeling' : 'jouw opdracht';
+    $('openLabel').textContent = m === 'OPEN' ? 'OPEN actief' : 'OPEN · houd ingedrukt';
+    refreshButtons();
+  }
+  function refreshButtons() {
+    var ready = !!s.adapter && !s.reconnecting;
+    $('auto').disabled = !s.adapter || s.reconnecting;
+    $('open').disabled = !ready || s.mode === 'OPEN' || s.busy;
+    $('connect').hidden = !!s.adapter;
+    $('demoDrop').hidden = !s.demo || !s.adapter;
+  }
+
+  async function runSetup() {
+    for (var i = 0; i < SETUP.length; i++) {
+      var t = await send(SETUP[i]);
+      if (!/OK/.test(t)) throw new Error('Adapterinstelling niet bevestigd: ' + SETUP[i]);
+    }
+  }
+
+  async function afterConnect() {
+    await runSetup();
+    var st = await readState(); show(st);
+    conn('verbonden', 'on'); banner('');
+    try { if (navigator.wakeLock) s.wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+    startPoll();
+    refreshButtons();
+  }
+
+  async function connect(demo) {
+    if (s.adapter) return;
+    try {
+      conn('verbinden…', '');
+      if (demo) { s.demo = true; s.adapter = new DemoAdapter(); }
+      else {
+        if (!navigator.bluetooth) { banner('Deze browser ondersteunt Web Bluetooth niet. Open deze pagina in Bluefy.'); conn('niet verbonden', 'warn'); return; }
+        var dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE] }] });
+        dev.addEventListener('gattserverdisconnected', onDrop);
+        s.adapter = new RealAdapter(dev);
+      }
+      await s.adapter.connect();
+      await afterConnect();
+    } catch (e) {
+      log('Fout: ' + e.message); banner('Verbinden mislukt: ' + e.message);
+      if (s.adapter) { s.adapter.disconnect(); }
+      s.adapter = null; conn('niet verbonden', 'warn'); refreshButtons();
+    }
+  }
+
+  function startPoll() {
+    stopPoll();
+    s.poll = setInterval(async function () {
+      if (s.busy || s.reconnecting || !s.adapter) return;
+      try {
+        var st = await readState(); show(st);
+        if (s.mode === 'OPEN' && st.out > 12 && st.cmd > 12) {
+          banner('De motorcomputer heeft de overname beëindigd. AUTO wordt teruggegeven.');
+          await toAuto(true);
+        }
+      } catch (e) { log('Poll: ' + e.message); }
+    }, POLL_MS);
+  }
+  function stopPoll() { if (s.poll) { clearInterval(s.poll); s.poll = null; } }
+  function clearOpenTimer() { if (s.timer) { clearTimeout(s.timer); s.timer = null; } }
+
+  async function doOpen() {
+    if (s.busy || s.mode === 'OPEN') return;
+    s.busy = true; refreshButtons(); banner('');
+    try {
+      var st = await readState(); show(st);
+      if (st.cmd !== 90 || st.out !== 90) { banner('De BMW-regeling stuurt de klep nu zelf (' + st.out.toFixed(0) + ' %). OPEN is niet nodig of niet veilig.'); return; }
+      await control(OPEN);
+      setMode('OPEN'); conn('OPEN actief', 'on');
+      var secs = parseInt($('timeout').value, 10);
+      clearOpenTimer(); s.timer = setTimeout(function () { banner('Tijd om: terug naar AUTO.'); toAuto(true); }, secs * 1000);
+      show(await readState());
+    } catch (e) {
+      log('OPEN fout: ' + e.message); banner('OPEN mislukt: ' + e.message + ' AUTO wordt teruggegeven.');
+      await toAuto(true);
+    } finally { s.busy = false; refreshButtons(); }
+  }
+
+  // Always try RCTECU (max 3x), then verify both values are back at 90.
+  async function toAuto(quiet) {
+    clearOpenTimer();
+    var ok = false;
+    s.busy = true; refreshButtons();
+    try {
+      for (var i = 0; i < 3 && !ok; i++) {
+        try { await control(RETURN); ok = true; } catch (e) { log('RCTECU poging ' + (i + 1) + ': ' + e.message); await new Promise(function (r) { setTimeout(r, 500); }); }
+      }
+      var back = false;
+      for (var j = 0; j < 8 && ok && !back; j++) {
+        try { var st = await readState(); show(st); back = st.cmd === 90 && st.out === 90; } catch (e) {}
+        if (!back) await new Promise(function (r) { setTimeout(r, 1000); });
+      }
+      setMode('AUTO'); conn(s.adapter ? 'verbonden' : 'niet verbonden', s.adapter ? 'on' : 'warn');
+      if (!ok) banner('AUTO kon NIET bevestigd worden. Zet het contact uit, wacht 1 minuut en probeer opnieuw.');
+      else if (!back) banner('AUTO verstuurd, maar de waarden staan nog niet op 90 %. Controleer opnieuw.');
+      else if (!quiet) banner('');
+    } finally { s.busy = false; refreshButtons(); }
+  }
+
+  async function onDrop() {
+    log('Verbinding weg');
+    var wasOpen = s.mode === 'OPEN';
+    stopPoll();
+    if (!wasOpen) { s.adapter = null; conn('niet verbonden', 'warn'); setMode('AUTO'); refreshButtons(); return; }
+    s.reconnecting = true; refreshButtons(); conn('verbinding weg', 'warn');
+    banner('Verbinding weg tijdens OPEN. Er wordt opnieuw verbonden om AUTO te sturen.');
+    var start = Date.now(), ok = false;
+    while (Date.now() - start < 90000 && !ok) {
+      try {
+        await s.adapter.connect(); await runSetup(); ok = true;
+      } catch (e) { await new Promise(function (r) { setTimeout(r, 2000); }); }
+    }
+    s.reconnecting = false;
+    if (!ok) { s.adapter = null; setMode('AUTO'); conn('niet verbonden', 'warn');
+      banner('Opnieuw verbinden is niet gelukt. Staat de klep nog open? Zet het contact uit en weer aan, of verbind opnieuw en kies AUTO.'); refreshButtons(); return; }
+    startPoll(); await toAuto(false); banner('Verbinding hersteld en AUTO teruggegeven.');
+  }
+
+  /* ---------- controls ---------- */
+  $('connect').addEventListener('click', function () { connect(false); });
+  $('demo').addEventListener('click', function () { connect(true); });
+  $('demoDrop').addEventListener('click', function () { if (s.adapter) { var a = s.adapter; a.up = false; onDrop(); setTimeout(function () { a.up = true; }, 4000); } });
+  $('auto').addEventListener('click', function () { banner(''); toAuto(false); });
+
+  var holdT = null, holdRaf = null, holdStart = 0;
+  function holdBegin(ev) {
+    if ($('open').disabled) return; ev.preventDefault();
+    holdStart = Date.now(); $('openLabel').textContent = 'blijf vasthouden…';
+    holdT = setTimeout(function () { holdEnd(true); }, HOLD_MS);
+    (function tick() { var f = Math.min(1, (Date.now() - holdStart) / HOLD_MS); $('holdfill').style.width = (f * 100) + '%'; if (holdT) holdRaf = requestAnimationFrame(tick); })();
+  }
+  function holdEnd(fire) {
+    if (holdT) { clearTimeout(holdT); holdT = null; }
+    if (holdRaf) cancelAnimationFrame(holdRaf);
+    $('holdfill').style.width = '0';
+    if (s.mode !== 'OPEN') $('openLabel').textContent = 'OPEN · houd ingedrukt';
+    if (fire === true) doOpen();
+  }
+  var ob = $('open');
+  ob.addEventListener('pointerdown', holdBegin);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (n) { ob.addEventListener(n, function () { holdEnd(false); }); });
+  ob.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  ob.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !holdT) holdBegin(e); });
+  ob.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') holdEnd(false); });
+
+  // Hand control back if the page is closed or hidden for long while OPEN.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && s.mode === 'OPEN') log('Pagina op de achtergrond; verbinding kan door iOS worden verbroken.');
+  });
+  window.addEventListener('pagehide', function () { if (s.mode === 'OPEN' && s.adapter) { try { s.adapter.write(RETURN); } catch (e) {} } });
+})();
+</script>
